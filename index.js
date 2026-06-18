@@ -38,6 +38,21 @@ const database = client.db("Assignment_10_db");
 const productCollection = database.collection("products");
 
 
+app.get('/api/products' , async (req,res) =>{
+    const  query = {};
+    if (req.query.sellerId){
+        query.sellerId = req.query.sellerId;
+
+    }
+    if(req.query.status){
+        query.status = req.query.status;
+    }
+    const cursor = productCollection.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+} )
+
+
 app.post('/api/products' , async (req,res) =>{
     const product = req.body;
     const result = await productCollection.insertOne(product)
