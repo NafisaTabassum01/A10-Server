@@ -33,9 +33,12 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-
+// --------collection-------------
 const database = client.db("Assignment_10_db");
 const productCollection = database.collection("products");
+const sellerCollection = database.collection("sellerProfiles");
+
+
 
 
 app.get('/api/products' , async (req,res) =>{
@@ -58,6 +61,44 @@ app.post('/api/products' , async (req,res) =>{
     const result = await productCollection.insertOne(product)
     res.send(result)
 } )
+
+
+app.post('/api/sellerProfile', async (req, res) => {
+  try {
+    const profile = req.body;
+
+    const existing = await sellerCollection.findOne({
+      email: profile.email
+    });
+
+    // already exists
+    if (existing) {
+      return res.status(409).send({
+        success: false,
+        message: "Profile already exists"
+      });
+    }
+
+    // insert FIRST
+    const result = await sellerCollection.insertOne(profile);
+
+    // then send response
+    return res.status(201).send({
+      success: true,
+      insertedId: result.insertedId
+    });
+
+  } catch (error) {
+    console.error("Seller Profile Error:", error);
+    return res.status(500).send({
+      success: false,
+      message: "Database server error"
+    });
+  }
+});
+
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
