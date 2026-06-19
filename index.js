@@ -62,41 +62,53 @@ app.post('/api/products' , async (req,res) =>{
     res.send(result)
 } )
 
+// app.get('/api/my/sellerProfile' , async (req,res)=>{
+  
+//   const query ={};
+//   if(req.query.sellerId){
+//     query.sellerId= req.query.sellerId;
+
+//   }
+//   const result = await sellerCollection.findOne(query);
+//   res.send(result);
+
+// })
+app.get('/api/my/sellerProfile', async (req, res) => {
+  try {
+    const query = {};
+
+    if (req.query.sellerId) {
+      query.sellerId = req.query.sellerId;
+    }
+
+    const result = await sellerCollection.findOne(query);
+
+    res.json(result || null); // 👈 IMPORTANT
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// app.post('/api/sellerProfile', async (req, res) => {
+//   const profile = req.body;
+//   const result = await sellerCollection.insertOne(profile)
+//   res.send(result);
+//   });
 
 app.post('/api/sellerProfile', async (req, res) => {
   try {
     const profile = req.body;
-
-    const existing = await sellerCollection.findOne({
-      email: profile.email
-    });
-
-    // already exists
-    if (existing) {
-      return res.status(409).send({
-        success: false,
-        message: "Profile already exists"
-      });
-    }
-
-    // insert FIRST
     const result = await sellerCollection.insertOne(profile);
 
-    // then send response
-    return res.status(201).send({
+    res.json({
       success: true,
-      insertedId: result.insertedId
+      insertedId: result.insertedId,
     });
-
-  } catch (error) {
-    console.error("Seller Profile Error:", error);
-    return res.status(500).send({
-      success: false,
-      message: "Database server error"
-    });
+  } catch (err) {
+    res.status(500).json({ message: "Insert failed" });
   }
 });
-
 
 
 
