@@ -37,6 +37,7 @@ async function run() {
 const database = client.db("Assignment_10_db");
 const productCollection = database.collection("products");
 const sellerCollection = database.collection("sellerProfiles");
+const paymentCollection = database.collection("payments");
 
 
 
@@ -61,6 +62,7 @@ app.post('/api/products' , async (req,res) =>{
     const result = await productCollection.insertOne(product)
     res.send(result)
 } )
+
 
 // app.get('/api/my/sellerProfile' , async (req,res)=>{
   
@@ -110,6 +112,49 @@ app.post('/api/sellerProfile', async (req, res) => {
   }
 });
 
+
+// --------payment-------
+app.get('/api/payments/:buyerId', async (req, res) => {
+
+  const { buyerId } = req.params;
+
+  const result =
+    await paymentCollection
+      .find({ buyerId })
+      .toArray();
+
+  res.send(result);
+
+});
+
+app.post('/api/payments', async (req, res) => {
+  try {
+
+    const paymentData = req.body;
+
+    const isExist = await paymentCollection.findOne({
+      stripeSessionId: paymentData.stripeSessionId
+    });
+
+    if (isExist) {
+      return res.send({
+        message: "Already Saved"
+      });
+    }
+
+    const result =
+      await paymentCollection.insertOne(paymentData);
+
+    res.send(result);
+
+  } catch (error) {
+
+    res.status(500).send({
+      error: error.message
+    });
+
+  }
+});
 
 
     // Send a ping to confirm a successful connection
