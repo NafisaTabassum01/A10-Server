@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 
 app.get('/' , (req,res) => {
@@ -75,6 +75,55 @@ app.post('/api/products' , async (req,res) =>{
 //   res.send(result);
 
 // })
+// reduce stock----------
+// const { ObjectId } = require("mongodb");
+
+app.patch("/api/products/:id/decrease-stock", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const product = await productCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!product) {
+      return res.status(404).send({
+        message: "Product not found",
+      });
+    }
+
+    if (product.Stock <= 0) {
+      return res.status(400).send({
+        message: "Out of stock",
+      });
+    }
+
+    const result = await productCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+        Stock: { $gt: 0 },
+      },
+      {
+        $inc: {
+          Stock: -1,
+        },
+      }
+    );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+
+
+
 app.get('/api/my/sellerProfile', async (req, res) => {
   try {
     const query = {};
@@ -142,10 +191,27 @@ app.post('/api/payments', async (req, res) => {
       });
     }
 
-    const result =
-      await paymentCollection.insertOne(paymentData);
+    // const result =
+    //   await paymentCollection.insertOne(paymentData);
 
-    res.send(result);
+    // res.send(result);
+
+const result = await paymentCollection.insertOne(paymentData);
+
+await productCollection.updateOne(
+  {
+    _id: new ObjectId(paymentData.productId),
+    Stock: { $gt: 0 }
+  },
+  {
+    $inc: {
+      Stock: -1
+    }
+  }
+);
+
+res.send(result);
+
 
   } catch (error) {
 
