@@ -40,6 +40,9 @@ const sellerCollection = database.collection("sellerProfiles");
 const paymentCollection = database.collection("payments");
 const wishlistCollection = database.collection("wishlist");
 
+const buyerCollection = database.collection("buyerProfiles");
+const orderCollection = database.collection("orders");
+
 
 
 
@@ -65,19 +68,6 @@ app.post('/api/products' , async (req,res) =>{
 } )
 
 
-// app.get('/api/my/sellerProfile' , async (req,res)=>{
-  
-//   const query ={};
-//   if(req.query.sellerId){
-//     query.sellerId= req.query.sellerId;
-
-//   }
-//   const result = await sellerCollection.findOne(query);
-//   res.send(result);
-
-// })
-// reduce stock----------
-// const { ObjectId } = require("mongodb");
 
 app.patch("/api/products/:id/decrease-stock", async (req, res) => {
   try {
@@ -121,6 +111,249 @@ app.patch("/api/products/:id/decrease-stock", async (req, res) => {
 
 
 
+// -------------buyer profile
+
+// ১. বায়ার প্রোফাইল গেট করা (buyerId দিয়ে)
+app.get('/api/buyerProfile/:buyerId', async (req, res) => {
+  try {
+    const { buyerId } = req.params;
+    const result = await buyerCollection.findOne({ buyerId });
+    res.json(result || null);
+  } catch (err) {
+    res.status(500).json({ message: "Server error fetching buyer profile" });
+  }
+});
+
+// ২. প্রথমবার বায়ার প্রোফাইল তৈরি করা (POST)
+app.post('/api/buyerProfile', async (req, res) => {
+  try {
+    const profile = req.body;
+    const isExist = await buyerCollection.findOne({ buyerId: profile.buyerId });
+
+    if (isExist) {
+      return res.status(400).send({ message: "Buyer profile already exists" });
+    }
+
+    const result = await buyerCollection.insertOne(profile);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// ৩. বায়ার প্রোফাইল এবং পাসওয়ার্ড আপডেট করা (PATCH)
+app.patch("/api/buyerProfile/:buyerId", async (req, res) => {
+  try {
+    const { buyerId } = req.params;
+    const updatedData = req.body;
+
+    // পাসওয়ার্ড চেঞ্জের রিকোয়ারমেন্ট হ্যান্ডেলিং (যদি পাসওয়ার্ড ফিল্ড পাঠানো হয়)
+    if (updatedData.password) {
+      // 💡 নোট: প্রোডাকশনে পাসওয়ার্ড অবশ্যই bcrypt দিয়ে হ্যাশ করে সেভ করবেন। 
+      // আপাতত আপনার রিকোয়ারমেন্টের অবজেক্ট স্ট্রাকচার অনুযায়ী সেট করা হলো।
+      console.log(`Password changing requested for Buyer: ${buyerId}`);
+    }
+
+    const result = await buyerCollection.updateOne(
+      { buyerId },
+      { $set: updatedData }
+    );
+
+    res.send({
+      success: true,
+      message: "Buyer Profile configurations updated successfully",
+      result
+    });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+
+
+
+
+
+// ------------order
+
+// ১. বায়ার যখন কোনো প্রোডাক্ট অর্ডার করবে (অর্ডার তৈরি)
+// 🎯 এতে বায়ারের সমস্ত প্রোফাইল ইনফরমেশন এমবেড হয়ে সেলারের জন্য রেডি থাকবে
+app.post('/api/orders', async (req, res) => {
+  try {
+    const orderData = req.body;
+    
+    // ইনিশিয়াল অর্ডার স্ট্যাটাস সবসময় "Pending" থাকবে
+    const finalOrder = {
+      ...orderData,
+      status: "Pending",
+      createdAt: new Date()
+    };
+
+    const result = await orderCollection.insertOne(finalOrder);
+    res.status(201).send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// ২. বায়ারের নিজস্ব 'My Orders' পেজের জন্য (Buyer ভিউ)
+// ২. বায়ারের নিজস্ব 'My Orders' পেজের জন্য (Buyer ভিউ) - FIXED
+app.get('/api/buyer/orders/:buyerId', async (req, res) => {
+  try {
+    const { buyerId } = req.params;
+    
+    // 🎯 ডাটাবেজের অবজেক্ট কি (Key) অনুযায়ী কুয়েরি ঠিক করা হলো
+    const result = await orderCollection
+      .find({ "buyerInfo.userId": buyerId }) 
+      .sort({ createdAt: -1 })
+      .toArray();
+      
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+// ৩. সেলারের ড্যাশবোর্ডের জন্য 'Manage Orders' (Seller ভিউ)
+// 🎯 এই এপিআই-এর মাধ্যমে সেলার শুধু তার নিজের প্রোডাক্টের অর্ডার এবং বায়ারের সব ইনফো দেখতে পাবে
+// app.get('/api/seller/orders/:sellerId', async (req, res) => {
+//   try {
+//     const { sellerId } = req.params;
+//     const result = await orderCollection.find({ sellerId: sellerId }).sort({ createdAt: -1 }).toArray();
+//     res.send(result);
+//   } catch (error) {
+//     res.status(500).send({ error: error.message });
+//   }
+// });
+
+// app.get('/api/seller/orders/:sellerId', async (req, res) => {
+//   try {
+//     const { sellerId } = req.params;
+
+//     const result = await orderCollection
+//       .find({
+//         "sellerInfo.userId": sellerId,
+//       })
+//       .sort({ createdAt: -1 })
+//       .toArray();
+
+//     res.send(result);
+//   } catch (error) {
+//     res.status(500).send({
+//       error: error.message,
+//     });
+//   }
+// });
+app.get('/api/seller/orders/:sellerId', async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+
+    const orders = await orderCollection
+      .find({
+        "sellerInfo.userId": sellerId,
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const enrichedOrders = await Promise.all(
+      orders.map(async (order) => {
+        const buyerProfile = await buyerCollection.findOne({
+          buyerId: order.buyerInfo?.userId,
+        });
+
+        return {
+          ...order,
+          buyerInfo: {
+            ...order.buyerInfo,
+            phone: buyerProfile?.phone || "",
+            address: buyerProfile?.address || "",
+            profilePicture: buyerProfile?.profilePicture || "",
+          },
+        };
+      })
+    );
+
+    res.send(enrichedOrders);
+  } catch (error) {
+    res.status(500).send({
+      error: error.message,
+    });
+  }
+});
+
+
+
+// ৪. সেলার অর্ডার আপডেট করবে (Accept / Reject / Update Delivery Status)
+// ফ্লো কন্ট্রোল ট্র্যাকিং: Pending → Accepted → Delivered অথবা Rejected
+// app.patch('/api/orders/:id/status', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { status } = req.body; // ফ্রন্টএন্ড থেকে পাঠানো হবে: "Accepted", "Rejected", বা "Delivered"
+
+//     // ভ্যালিডেশন চেক যেন ফ্লো ব্রেক না করে
+//     const validStatuses = ["Pending", "Accepted", "Rejected", "Delivered"];
+//     if (!validStatuses.includes(status)) {
+//       return res.status(400).send({ message: "Invalid status state transition." });
+//     }
+
+//     const result = await orderCollection.updateOne(
+//       { _id: new ObjectId(id) },
+//       { $set: { status: status } }
+//     );
+
+//     res.send({
+//       success: true,
+//       message: `Order status successfully transitioned to ${status}`,
+//       result
+//     });
+//   } catch (error) {
+//     res.status(500).send({ error: error.message });
+//   }
+// });
+
+
+app.patch('/api/orders/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+const validStatuses = [
+  "processing",
+  "Accepted",
+  "Rejected",
+  "Delivered"
+];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).send({
+        message: "Invalid status",
+      });
+    }
+
+    const result = await orderCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $set: {
+          orderStatus: status,
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      error: error.message,
+    });
+  }
+});
+
+
 
 
 
@@ -142,25 +375,6 @@ app.get('/api/my/sellerProfile', async (req, res) => {
 });
 
 
-// app.post('/api/sellerProfile', async (req, res) => {
-//   const profile = req.body;
-//   const result = await sellerCollection.insertOne(profile)
-//   res.send(result);
-//   });
-
-// app.post('/api/sellerProfile', async (req, res) => {
-//   try {
-//     const profile = req.body;
-//     const result = await sellerCollection.insertOne(profile);
-
-//     res.json({
-//       success: true,
-//       insertedId: result.insertedId,
-//     });
-//   } catch (err) {
-//     res.status(500).json({ message: "Insert failed" });
-//   }
-// });
 
 app.post('/api/sellerProfile', async (req, res) => {
 
@@ -187,29 +401,6 @@ app.post('/api/sellerProfile', async (req, res) => {
 
 
 
-// edit seller.............
-// app.patch("/api/sellerProfile/:sellerId", async (req, res) => {
-//   try {
-//     const { sellerId } = req.params;
-
-//     const updatedData = req.body;
-
-//     const result = await sellerCollection.updateOne(
-//       {
-//         sellerId,
-//       },
-//       {
-//         $set: updatedData,
-//       }
-//     );
-
-//     res.send(result);
-//   } catch (error) {
-//     res.status(500).send({
-//       error: error.message,
-//     });
-//   }
-// });
 
 app.patch("/api/sellerProfile/:sellerId", async (req, res) => {
   try {
@@ -410,51 +601,127 @@ app.get('/api/payments/:buyerId', async (req, res) => {
 
 });
 
+// app.post('/api/payments', async (req, res) => {
+//       try {
+//         const paymentData = req.body;
+
+//         // ১. পেমেন্ট অলরেডি সেভড কিনা চেক করা
+//         const isExist = await paymentCollection.findOne({
+//           stripeSessionId: paymentData.stripeSessionId
+//         });
+
+//         if (isExist) {
+//           return res.send({ message: "Already Saved" });
+//         }
+
+//         // ২. পেমেন্ট কালেকশনে ট্রানজেকশন সেভ করা
+//         const paymentResult = await paymentCollection.insertOne(paymentData);
+
+//         // ৩. ডকের রিকোয়ারমেন্ট অনুযায়ী অবজেক্ট স্ট্রাকচার বানিয়ে 'orders' কালেকশনে সেভ করা
+//         const orderDoc = {
+//           buyerInfo: {
+//             userId: paymentData.buyerId,
+//             name: paymentData.buyerName,
+//             email: paymentData.buyerEmail
+//           },
+//           sellerInfo: {
+//             userId: paymentData.sellerId,
+//             name: paymentData.sellerName,
+//             email: paymentData.sellerEmail
+//           },
+//           productId: paymentData.productId,
+//           paymentStatus: "paid",
+//           orderStatus: "processing", // ডকুমেন্টেশন রিকোয়ারমেন্ট অনুযায়ী প্রথম স্ট্যাটাস
+//           createdAt: new Date()
+//         };
+
+//         await orderCollection.insertOne(orderDoc);
+
+//         // ৪. প্রোডাক্টের স্টক ১ কমিয়ে দেওয়া
+//         await productCollection.updateOne(
+//           { _id: new ObjectId(paymentData.productId), Stock: { $gt: 0 } },
+//           { $inc: { Stock: -1 } }
+//         );
+
+//         res.send({
+//           success: true,
+//           message: "Payment tracked and Order collected in strict format",
+//           paymentResult
+//         });
+
+//       } catch (error) {
+//         res.status(500).send({ error: error.message });
+//       }
+//     });
+
+
 app.post('/api/payments', async (req, res) => {
   try {
-
     const paymentData = req.body;
 
+    // ১. পেমেন্ট অলরেডি সেভড কিনা চেক করা
     const isExist = await paymentCollection.findOne({
       stripeSessionId: paymentData.stripeSessionId
     });
 
     if (isExist) {
-      return res.send({
-        message: "Already Saved"
-      });
+      return res.send({ message: "Already Saved" });
     }
 
-    // const result =
-    //   await paymentCollection.insertOne(paymentData);
+    // ২. পেমেন্ট কালেকশনে ট্রানজেকশন সেভ করা
+    const paymentResult = await paymentCollection.insertOne(paymentData);
 
-    // res.send(result);
+    // 🆕 ৩. ডাটাবেজ থেকে বায়ারের রিয়েল প্রোফাইল খুঁজে বের করা (null ঠেকাতে)
+    const buyerProfile = await buyerCollection.findOne({ buyerId: paymentData.buyerId });
 
-const result = await paymentCollection.insertOne(paymentData);
+    // 🆕 ৪. ডাটাবেজ থেকে প্রোডাক্টের মেইন ডাটা তুলে আনা (যাতে সেলারের আইডি এবং ডিটেইলস পাওয়া যায়)
+    const productDetail = await productCollection.findOne({ _id: new ObjectId(paymentData.productId) });
 
-await productCollection.updateOne(
-  {
-    _id: new ObjectId(paymentData.productId),
-    Stock: { $gt: 0 }
-  },
-  {
-    $inc: {
-      Stock: -1
-    }
-  }
-);
+    // ৫. 🎯 ডকের রিকোয়ারমেন্ট অনুযায়ী নিখুঁত অবজেক্ট স্ট্রাকচার তৈরি
+    const orderDoc = {
+    buyerInfo: {
+      userId: paymentData.buyerId,
+  name: buyerProfile?.name || "Unknown Buyer",
+  email: buyerProfile?.email || "No Email",
+  phone: buyerProfile?.phone || "",
+  address: buyerProfile?.address || "",
+  profilePicture: buyerProfile?.profilePicture || "",
+      },
+      sellerInfo: {
+        userId: productDetail ? productDetail.sellerId : null,    // প্রোডাক্ট ডক থেকে সেলার আইডি
+        name: productDetail ? productDetail.sellerName : null,    // প্রোডাক্ট ডক থেকে সেলারের নাম
+        email: productDetail ? productDetail.sellerEmail : null   // প্রোডাক্ট ডক থেকে সেলারের ইমেইল
+      },
+      productId: paymentData.productId,
+      productTitle: paymentData.productTitle || (productDetail ? productDetail.ProductTitle : "Premium Product"), // ফ্রন্টএন্ডের জন্য টাইটেল ব্যাকআপ
+      price: paymentData.amount || (productDetail ? productDetail.Price : 0), // ফ্রন্টএন্ডের জন্য প্রাইস ব্যাকআপ
+      paymentStatus: "paid",
+      orderStatus: "processing", 
+      createdAt: new Date()
+    };
 
-res.send(result);
+    // orders কালেকশনে নিখুঁত ডাটা ঢুকিয়ে দেওয়া
+    await orderCollection.insertOne(orderDoc);
 
+    // ৬. প্রোডাক্টের স্টক ১ কমিয়ে দেওয়া
+    await productCollection.updateOne(
+      { _id: new ObjectId(paymentData.productId), Stock: { $gt: 0 } },
+      { $inc: { Stock: -1 } }
+    );
 
-  } catch (error) {
-
-    res.status(500).send({
-      error: error.message
+    res.send({
+      success: true,
+      message: "Payment tracked and Order collected in strict format without null values",
+      paymentResult
     });
 
+  } catch (error) {
+    res.status(500).send({ error: error.message });
   }
 });
+
+
+
 
 
     // Send a ping to confirm a successful connection
@@ -467,6 +734,6 @@ res.send(result);
 }
 run().catch(console.dir);
 
-app.listen(port,()=>{
+app.listen(port, () => {
     console.log(`Example app listning on port ${port}`)
-})
+});
