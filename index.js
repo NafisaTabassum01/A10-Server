@@ -162,6 +162,69 @@ app.post('/api/sellerProfile', async (req, res) => {
 });
 
 
+
+// ........edit product
+
+app.patch("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const updatedData = req.body;
+
+    const result = await productCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $set: updatedData,
+      }
+    );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+app.get("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const result = await productCollection.findOne({
+    _id: new ObjectId(id),
+  });
+
+  res.send(result);
+});
+
+
+// delete product............
+
+app.delete("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await productCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+
+
 // --------payment-------
 app.get('/api/payments/:buyerId', async (req, res) => {
 
