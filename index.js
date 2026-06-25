@@ -38,6 +38,7 @@ const database = client.db("Assignment_10_db");
 const productCollection = database.collection("products");
 const sellerCollection = database.collection("sellerProfiles");
 const paymentCollection = database.collection("payments");
+const wishlistCollection = database.collection("wishlist");
 
 
 
@@ -302,6 +303,94 @@ app.delete("/api/products/:id", async (req, res) => {
   }
 });
 
+
+
+// --------wishlist--------
+
+// ১. চেক করা, প্রোডাক্টটি ইতিমধ্যে উইশলিস্টে আছে কিনা এবং বায়ারের সম্পূর্ণ উইশলিস্ট আইডি লিস্ট নেওয়া
+app.get('/api/wishlist/check', async (req, res) => {
+  try {
+    const { userId, productId } = req.query;
+    if (!userId) return res.status(400).send({ message: "UserId required" });
+
+    if (productId) {
+      // নির্দিষ্ট ১টা প্রোডাক্টের জন্য চেক (Product Details Page এর জন্য)
+      const isExist = await wishlistCollection.findOne({ userId, productId });
+      return res.send({ isWishlisted: !!isExist });
+    } else {
+      // বায়ারের উইশলিস্টে থাকা সকল প্রোডাক্ট আইডির অ্যারে (লিস্ট পেজে হার্ট কালার করার জন্য)
+      const list = await wishlistCollection.find({ userId }).toArray();
+      const productIds = list.map(item => item.productId);
+      return res.send(productIds);
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// ২. উইশলিস্টে প্রোডাক্ট যোগ করা অথবা থাকলে রিমুভ করা (Toggle Feature)
+app.post('/api/wishlist/toggle', async (req, res) => {
+  try {
+    const { userId, productId } = req.body;
+    if (!userId || !productId) return res.status(400).send({ message: "Missing data" });
+
+    const isExist = await wishlistCollection.findOne({ userId, productId });
+
+    if (isExist) {
+      // যদি আগে থেকেই থাকে, তাহলে রিমুভ করে দাও
+      await wishlistCollection.deleteOne({ userId, productId });
+      return res.send({ isWishlisted: false, message: "Removed from wishlist" });
+    } else {
+      // না থাকলে নতুন করে অ্যাড করো
+      await wishlistCollection.insertOne({ userId, productId, addedAt: new Date() });
+      return res.send({ isWishlisted: true, message: "Added to wishlist" });
+    }
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// ৩. বায়ারের ড্যাশবোর্ডে উইশলিস্ট করা প্রোডাক্টগুলোর ডিটেইলস ডাটা রিট্রিভ করা (Aggregate)
+app.get('/api/wishlist/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const result = await wishlistCollection.aggregate([
+      { $match: { userId: userId } },
+      {
+        $addFields: {
+          // productId কে স্ট্রিং থেকে ObjectI-এ কনভার্ট করা যেন Lookup ম্যাচ করে
+          productObjId: { $toObjectId: "$productId" }
+        }
+      },
+      {
+        $lookup: {
+          from: "products", // প্রোডাক্ট কালেকশনের নাম
+          localField: "productObjId",
+          foreignField: "_id",
+          as: "productDetails"
+        }
+      },
+      { $unwind: "$productDetails" }, // অ্যারে থেকে অবজেক্টে রূপান্তর
+      {
+        $project: {
+          _id: 1,
+          productId: 1,
+          userId: 1,
+          ProductTitle: "$productDetails.ProductTitle",
+          Price: "$productDetails.Price",
+          Stock: "$productDetails.Stock",
+          ImageUrl: "$productDetails.ImageUrl",
+          Category: "$productDetails.Category"
+        }
+      }
+    ]).toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
 
 
 
