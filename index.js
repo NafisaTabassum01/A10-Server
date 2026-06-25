@@ -147,20 +147,102 @@ app.get('/api/my/sellerProfile', async (req, res) => {
 //   res.send(result);
 //   });
 
-app.post('/api/sellerProfile', async (req, res) => {
-  try {
-    const profile = req.body;
-    const result = await sellerCollection.insertOne(profile);
+// app.post('/api/sellerProfile', async (req, res) => {
+//   try {
+//     const profile = req.body;
+//     const result = await sellerCollection.insertOne(profile);
 
-    res.json({
-      success: true,
-      insertedId: result.insertedId,
+//     res.json({
+//       success: true,
+//       insertedId: result.insertedId,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: "Insert failed" });
+//   }
+// });
+
+app.post('/api/sellerProfile', async (req, res) => {
+
+  const profile = req.body;
+
+  const isExist = await sellerCollection.findOne({
+    sellerId: profile.sellerId
+  });
+
+  if (isExist) {
+    return res.status(400).send({
+      message: "Seller profile already exists"
     });
-  } catch (err) {
-    res.status(500).json({ message: "Insert failed" });
   }
+
+  const result =
+    await sellerCollection.insertOne(profile);
+
+  res.send(result);
 });
 
+
+
+
+
+
+// edit seller.............
+// app.patch("/api/sellerProfile/:sellerId", async (req, res) => {
+//   try {
+//     const { sellerId } = req.params;
+
+//     const updatedData = req.body;
+
+//     const result = await sellerCollection.updateOne(
+//       {
+//         sellerId,
+//       },
+//       {
+//         $set: updatedData,
+//       }
+//     );
+
+//     res.send(result);
+//   } catch (error) {
+//     res.status(500).send({
+//       error: error.message,
+//     });
+//   }
+// });
+
+app.patch("/api/sellerProfile/:sellerId", async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+
+    const updatedData = req.body;
+
+    await sellerCollection.updateOne(
+      { sellerId },
+      {
+        $set: updatedData,
+      }
+    );
+
+    await productCollection.updateMany(
+      { sellerId },
+      {
+        $set: {
+          sellerName: updatedData.name,
+          sellerProfilePicture: updatedData.profilePicture,
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      message: "Profile updated",
+    });
+  } catch (error) {
+    res.status(500).send({
+      error: error.message,
+    });
+  }
+});
 
 
 // ........edit product
