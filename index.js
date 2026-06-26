@@ -198,6 +198,101 @@ app.delete("/api/admin/users/:id", async (req, res) => {
 
 
 
+// admin manage product-------------
+app.get("/api/admin/products", async (req, res) => {
+  try {
+    const products = await productCollection.find().toArray();
+
+    res.send({
+      success: true,
+      data: products,
+    });
+  } catch (err) {
+    res.status(500).send({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+
+app.patch("/api/admin/products/approve/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await productCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $set: {
+          status: "approved",
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      result,
+    });
+  } catch (err) {
+    res.status(500).send({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+
+app.patch("/api/admin/products/reject/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await productCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $set: {
+          status: "rejected",
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      result,
+    });
+  } catch (err) {
+    res.status(500).send({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+
+
+
+// admin manage orders--------------
+app.get("/api/admin/orders", async (req, res) => {
+  try {
+    const orders = await orderCollection
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 
 
@@ -206,19 +301,39 @@ app.delete("/api/admin/users/:id", async (req, res) => {
 
 
 
-app.get('/api/products' , async (req,res) =>{
-    const  query = {};
-    if (req.query.sellerId){
-        query.sellerId = req.query.sellerId;
+// product---------
+app.get("/api/products", async (req, res) => {
+  try {
+    const { sellerId, status } = req.query;
 
+    const query = {};
+
+    if (sellerId) {
+      query.sellerId = sellerId;
     }
-    if(req.query.status){
-        query.status = req.query.status;
+
+    if (status) {
+      query.status = status;
     }
-    const cursor = productCollection.find(query);
-    const result = await cursor.toArray();
-    res.send(result);
-} )
+
+    const products = await productCollection.find(query).toArray();
+
+    res.send({
+      success: true,
+      data: products,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+
+
+
 
 
 app.post('/api/products' , async (req,res) =>{
@@ -611,6 +726,8 @@ app.patch("/api/products/:id", async (req, res) => {
       },
       {
         $set: updatedData,
+        status: "pending",
+
       }
     );
 
