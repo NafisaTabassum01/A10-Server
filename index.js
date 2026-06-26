@@ -44,6 +44,166 @@ const buyerCollection = database.collection("buyerProfiles");
 const orderCollection = database.collection("orders");
 
 
+const userCollection = database.collection("user");
+
+
+
+// -------------------admin-------------------------
+
+// 📊 অ্যাডমিন ড্যাশবোর্ড ওভারভিউ ডাটা এপিআই
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    // ডাটাবেজ থেকে দ্রুত কাউন্ট করার জন্য estimatedDocumentCount ব্যবহার করা হয়েছে
+    const totalProducts = await productCollection.estimatedDocumentCount();
+    const totalOrders = await orderCollection.estimatedDocumentCount();
+    
+    // বায়ার এবং সেলার কালেকশনের মোট যোগফলই হলো টোটাল ইউজার
+    const totalBuyers = await buyerCollection.estimatedDocumentCount();
+    const totalSellers = await sellerCollection.estimatedDocumentCount();
+    const totalUsers = totalBuyers + totalSellers;
+
+    res.send({
+      success: true,
+      data: {
+        totalUsers,
+        totalProducts,
+        totalOrders
+      }
+    });
+  } catch (error) {
+    res.status(500).send({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+
+
+
+
+// const { ObjectId } = require('mongodb'); // চেক করে নিস এই লাইনটা ওপরে আছে কিনা
+
+app.get("/api/admin/users", async (req, res) => {
+  try {
+    const { search, role } = req.query;
+
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        {
+          name: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          email: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    if (role) {
+      query.role = role;
+    }
+
+    const users = await userCollection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const formattedUsers = users.map((user) => ({
+      ...user,
+      status: user.status || "Active",
+    }));
+
+    res.send({
+      success: true,
+      data: formattedUsers,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+
+
+app.patch("/api/admin/users/status", async (req, res) => {
+  try {
+    const { id, status } = req.body;
+
+    const result = await userCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+      },
+      {
+        $set: {
+          status,
+        },
+      }
+    );
+
+    res.send({
+      success: true,
+      message: `User status updated to ${status}`,
+      result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+
+
+app.delete("/api/admin/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await userCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    await userCollection.deleteOne({
+      _id: new ObjectId(id),
+    });
+
+    res.send({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+
+
+
+
+
 
 
 app.get('/api/products' , async (req,res) =>{
@@ -601,58 +761,6 @@ app.get('/api/payments/:buyerId', async (req, res) => {
 
 });
 
-// app.post('/api/payments', async (req, res) => {
-//       try {
-//         const paymentData = req.body;
-
-//         // ১. পেমেন্ট অলরেডি সেভড কিনা চেক করা
-//         const isExist = await paymentCollection.findOne({
-//           stripeSessionId: paymentData.stripeSessionId
-//         });
-
-//         if (isExist) {
-//           return res.send({ message: "Already Saved" });
-//         }
-
-//         // ২. পেমেন্ট কালেকশনে ট্রানজেকশন সেভ করা
-//         const paymentResult = await paymentCollection.insertOne(paymentData);
-
-//         // ৩. ডকের রিকোয়ারমেন্ট অনুযায়ী অবজেক্ট স্ট্রাকচার বানিয়ে 'orders' কালেকশনে সেভ করা
-//         const orderDoc = {
-//           buyerInfo: {
-//             userId: paymentData.buyerId,
-//             name: paymentData.buyerName,
-//             email: paymentData.buyerEmail
-//           },
-//           sellerInfo: {
-//             userId: paymentData.sellerId,
-//             name: paymentData.sellerName,
-//             email: paymentData.sellerEmail
-//           },
-//           productId: paymentData.productId,
-//           paymentStatus: "paid",
-//           orderStatus: "processing", // ডকুমেন্টেশন রিকোয়ারমেন্ট অনুযায়ী প্রথম স্ট্যাটাস
-//           createdAt: new Date()
-//         };
-
-//         await orderCollection.insertOne(orderDoc);
-
-//         // ৪. প্রোডাক্টের স্টক ১ কমিয়ে দেওয়া
-//         await productCollection.updateOne(
-//           { _id: new ObjectId(paymentData.productId), Stock: { $gt: 0 } },
-//           { $inc: { Stock: -1 } }
-//         );
-
-//         res.send({
-//           success: true,
-//           message: "Payment tracked and Order collected in strict format",
-//           paymentResult
-//         });
-
-//       } catch (error) {
-//         res.status(500).send({ error: error.message });
-//       }
-//     });
 
 
 app.post('/api/payments', async (req, res) => {
