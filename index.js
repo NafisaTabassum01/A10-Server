@@ -199,9 +199,45 @@ app.delete("/api/admin/users/:id", async (req, res) => {
 
 
 // admin manage product-------------
+// app.get("/api/admin/products", async (req, res) => {
+//   try {
+//     const products = await productCollection.find().toArray();
+
+//     res.send({
+//       success: true,
+//       data: products,
+//     });
+//   } catch (err) {
+//     res.status(500).send({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// });
+
+
+
 app.get("/api/admin/products", async (req, res) => {
   try {
-    const products = await productCollection.find().toArray();
+    const { search, status } = req.query;
+
+    const query = {};
+
+    if (search) {
+      query.ProductTitle = {
+        $regex: search,
+        $options: "i",
+      };
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    const products = await productCollection
+      .find(query)
+      .sort({ _id: -1 })
+      .toArray();
 
     res.send({
       success: true,
@@ -725,9 +761,10 @@ app.patch("/api/products/:id", async (req, res) => {
         _id: new ObjectId(id),
       },
       {
-        $set: updatedData,
-        status: "pending",
-
+       $set: {
+      ...updatedData,
+      status: "pending",
+    },
       }
     );
 
@@ -904,14 +941,15 @@ app.post('/api/payments', async (req, res) => {
 
     // ৫. 🎯 ডকের রিকোয়ারমেন্ট অনুযায়ী নিখুঁত অবজেক্ট স্ট্রাকচার তৈরি
     const orderDoc = {
-    buyerInfo: {
-      userId: paymentData.buyerId,
-  name: buyerProfile?.name || "Unknown Buyer",
-  email: buyerProfile?.email || "No Email",
-  phone: buyerProfile?.phone || "",
-  address: buyerProfile?.address || "",
-  profilePicture: buyerProfile?.profilePicture || "",
-      },
+buyerInfo: {
+    userId: paymentData.buyerId,
+    name: paymentData.buyerName,
+    phone: paymentData.buyerPhone,
+    address: paymentData.buyerAddress,
+
+    email: buyerProfile?.email || "",
+    profilePicture: buyerProfile?.profilePicture || "",
+},
       sellerInfo: {
         userId: productDetail ? productDetail.sellerId : null,    // প্রোডাক্ট ডক থেকে সেলার আইডি
         name: productDetail ? productDetail.sellerName : null,    // প্রোডাক্ট ডক থেকে সেলারের নাম
