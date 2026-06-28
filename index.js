@@ -367,6 +367,38 @@ app.get("/api/products", async (req, res) => {
 });
 
 
+// 🎯 হোম পেজের জন্য লেটেস্ট ৬টি প্রোডাক্ট নিয়ে আসার API
+app.get("/api/products/featured", async (req, res) => {
+  try {
+    const featuredProducts = await productCollection
+      .find()                       // সব প্রোডাক্ট খুঁজবে (আপনার ইচ্ছামতো এখানে {status: "approved"} দিতে পারেন)
+      .sort({ _id: -1 })            // একদম নতুন আপলোড হওয়া প্রোডাক্ট সবার আগে আসবে
+      .limit(6)                     // সবসময় সর্বোচ্চ ৬টি প্রোডাক্টে লক থাকবে
+      .toArray();
+
+    res.send({
+      success: true,
+      data: featuredProducts,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+app.get("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
+
+  const result = await productCollection.findOne({
+    _id: new ObjectId(id),
+  });
+
+  res.send(result);
+});
+
 
 
 
@@ -779,15 +811,15 @@ app.patch("/api/products/:id", async (req, res) => {
 
 
 
-app.get("/api/products/:id", async (req, res) => {
-  const { id } = req.params;
+// app.get("/api/products/:id", async (req, res) => {
+//   const { id } = req.params;
 
-  const result = await productCollection.findOne({
-    _id: new ObjectId(id),
-  });
+//   const result = await productCollection.findOne({
+//     _id: new ObjectId(id),
+//   });
 
-  res.send(result);
-});
+//   res.send(result);
+// });
 
 
 // delete product............
@@ -896,6 +928,10 @@ app.get('/api/wishlist/:userId', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+
+
+
+
 
 
 
