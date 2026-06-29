@@ -1,3 +1,8 @@
+const dns = require("node:dns");
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
+
+
 const express = require('express')
 const cors = require('cors');
 const app = express()
@@ -9,6 +14,18 @@ app.use(express.json());
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+// const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
+
+
+
+
+
+
+
+
+
+
+
 
 
 app.get('/' , (req,res) => {
@@ -28,10 +45,14 @@ const client = new MongoClient(uri, {
   }
 });
 
-async function run() {
-  try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+// async function run() {
+//   try {
+//     // Connect the client to the server	(optional starting in v4.7)
+//     await client.connect();
+
+client.connect(()=> {
+  console.log('connecting to Mongodb')
+}).catch(console.dir)
 
 // --------collection-------------
 const database = client.db("Assignment_10_db");
@@ -42,16 +63,79 @@ const wishlistCollection = database.collection("wishlist");
 
 const buyerCollection = database.collection("buyerProfiles");
 const orderCollection = database.collection("orders");
-
-
 const userCollection = database.collection("user");
+const sessionCollection = database.collection("session");
+
+
+
+// varification relatel................
+
+const verifyToken = async (req, res, next) => {
+
+console.log('headers' , req.headers);
+
+const authHeader = req.headers?.authorization;
+if (!authHeader){
+  return res.status(401).send({message:'unautorized access'})
+}
+const token = authHeader.split(' ')[1]
+if(!token){
+  return res.status(401).send({message:'unautorized access'})
+
+}
+
+const query = { token: token}
+const session = await sessionCollection.findOne(query)
+const userId = session.userId
+
+const userQuery = {
+  _id :userId
+}
+const user = await userCollection.findOne(userQuery)
+
+req.user = user
+
+next();
+};
+
+const verifyBuyer = async (req,res,next)=>{
+if(req.user?.role !== 'buyer'){
+    return res.status(401).send({message:'unautorized access'})
+
+}
+  next();
+
+  console.log(req.user)
+}
+
+const verifySeller = async (req,res,next)=>{
+if(req.user?.role !== 'seller'){
+    return res.status(401).send({message:'unautorized access'})
+
+}
+  next();
+
+  console.log(req.user)
+}
+const verifyAdmin = async (req,res,next)=>{
+if(req.user?.role !== 'admin'){
+    return res.status(401).send({message:'unautorized access'})
+
+}
+  next();
+
+  console.log(req.user)
+}
+
+
+
 
 
 
 // -------------------admin-------------------------
 
 // 📊 অ্যাডমিন ড্যাশবোর্ড ওভারভিউ ডাটা এপিআই
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats',verifyToken,verifyAdmin, async (req, res) => {
   try {
     // ডাটাবেজ থেকে দ্রুত কাউন্ট করার জন্য estimatedDocumentCount ব্যবহার করা হয়েছে
     const totalProducts = await productCollection.estimatedDocumentCount();
@@ -84,7 +168,7 @@ app.get('/api/admin/stats', async (req, res) => {
 
 // const { ObjectId } = require('mongodb'); // চেক করে নিস এই লাইনটা ওপরে আছে কিনা
 
-app.get("/api/admin/users", async (req, res) => {
+app.get("/api/admin/users",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const { search, role } = req.query;
 
@@ -135,7 +219,7 @@ app.get("/api/admin/users", async (req, res) => {
 
 
 
-app.patch("/api/admin/users/status", async (req, res) => {
+app.patch("/api/admin/users/status",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const { id, status } = req.body;
 
@@ -165,7 +249,7 @@ app.patch("/api/admin/users/status", async (req, res) => {
 
 
 
-app.delete("/api/admin/users/:id", async (req, res) => {
+app.delete("/api/admin/users/:id",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -217,7 +301,7 @@ app.delete("/api/admin/users/:id", async (req, res) => {
 
 
 
-app.get("/api/admin/products", async (req, res) => {
+app.get("/api/admin/products",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const { search, status } = req.query;
 
@@ -252,7 +336,7 @@ app.get("/api/admin/products", async (req, res) => {
 });
 
 
-app.patch("/api/admin/products/approve/:id", async (req, res) => {
+app.patch("/api/admin/products/approve/:id",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -280,7 +364,7 @@ app.patch("/api/admin/products/approve/:id", async (req, res) => {
 });
 
 
-app.patch("/api/admin/products/reject/:id", async (req, res) => {
+app.patch("/api/admin/products/reject/:id",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -311,7 +395,7 @@ app.patch("/api/admin/products/reject/:id", async (req, res) => {
 
 
 // admin manage orders--------------
-app.get("/api/admin/orders", async (req, res) => {
+app.get("/api/admin/orders",verifyToken,verifyAdmin, async (req, res) => {
   try {
     const orders = await orderCollection
       .find()
@@ -339,6 +423,7 @@ app.get("/api/admin/orders", async (req, res) => {
 
 // product---------
 app.get("/api/products", async (req, res) => {
+  console.log("PRODUCT API HIT");
   try {
     const { sellerId, status } = req.query;
 
@@ -401,14 +486,100 @@ app.get("/api/products/:id", async (req, res) => {
 
 
 
+// ..........product add 
+
+
+// app.post('/api/products', verifyToken ,async (req, res) => {
+//   try {
+//     const product = req.body;
+
+//     // 🔒 সিকিউরিটি লক: ফ্রন্টএন্ড থেকে পাঠানো সেলার আইডির বদলে টোকেন ভেরিফাইড আইডি নেওয়া সবচেয়ে নিরাপদ
+//     product.sellerId = req.user.sub; // Better-Auth এ 'sub' এর ভেতরেই ইউজার আইডি থাকে
+
+//     const result = await productCollection.insertOne(product);
+    
+//     // ✅ ফ্রন্টএন্ডের 'res.json()' এর সাথে ম্যাচ করার জন্য সঠিক JSON রেসপন্স
+//     return res.status(201).json({
+//       success: true,
+//       message: "Product verified and added successfully!",
+//       data: result
+//     });
+//   } catch (error) {
+//     console.error("Insert product error:", error.message);
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// });
 
 
 
-app.post('/api/products' , async (req,res) =>{
+
+app.post("/api/products",verifyToken, async (req, res) => {
+  try {
     const product = req.body;
-    const result = await productCollection.insertOne(product)
-    res.send(result)
-} )
+
+    const result = await productCollection.insertOne(product);
+
+    return res.status(201).json({
+      success: true,
+      message: "Product added successfully!",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Insert product error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+
+
+// const { createRemoteJWKSet, jwtVerify } = require("jose");
+
+// const JWKS = createRemoteJWKSet(
+//   new URL(`${process.env.NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth/jwks`)
+// );
+
+// const verifyToken = async (req, res, next) => {
+//   try {
+//     const authHeader = req.headers.authorization;
+
+//     if (!authHeader?.startsWith("Bearer ")) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized: No token provided",
+//       });
+//     }
+
+//     const token = authHeader.split(" ")[1];
+
+//     const { payload } = await jwtVerify(token, JWKS);
+
+//     if (payload.role !== "seller") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Forbidden: Seller only",
+//       });
+//     }
+
+//     req.user = payload;
+
+//     next();
+//   } catch (err) {
+//     console.error("JWT Verify Error:", err);
+
+//     return res.status(401).json({
+//       success: false,
+//       message: "Unauthorized: Invalid token",
+//     });
+//   }
+// };
+
+
+
 
 
 
@@ -457,8 +628,21 @@ app.patch("/api/products/:id/decrease-stock", async (req, res) => {
 // -------------buyer profile
 
 // ১. বায়ার প্রোফাইল গেট করা (buyerId দিয়ে)
-app.get('/api/buyerProfile/:buyerId', async (req, res) => {
+app.get('/api/buyerProfile/:buyerId' , verifyToken , verifyBuyer , async (req, res) => {
   try {
+    const query = {}
+    if(req.query.buyerId){
+      query.buyerId = req.query.buyerId;
+      console.log(req.user , req.user.buyerId)
+
+   if(req.user._id.toString() !== req.query.buyerId)
+    return res.status(403).send({message : 'forbidden messege'})
+    }
+
+
+
+
+
     const { buyerId } = req.params;
     const result = await buyerCollection.findOne({ buyerId });
     res.json(result || null);
@@ -489,6 +673,8 @@ app.patch("/api/buyerProfile/:buyerId", async (req, res) => {
   try {
     const { buyerId } = req.params;
     const updatedData = req.body;
+
+    // buyer id check............
 
     // পাসওয়ার্ড চেঞ্জের রিকোয়ারমেন্ট হ্যান্ডেলিং (যদি পাসওয়ার্ড ফিল্ড পাঠানো হয়)
     if (updatedData.password) {
@@ -539,6 +725,10 @@ app.post('/api/orders', async (req, res) => {
     res.status(500).send({ error: error.message });
   }
 });
+
+
+
+
 
 // ২. বায়ারের নিজস্ব 'My Orders' পেজের জন্য (Buyer ভিউ)
 // ২. বায়ারের নিজস্ব 'My Orders' পেজের জন্য (Buyer ভিউ) - FIXED
@@ -701,7 +891,7 @@ const validStatuses = [
 
 
 
-app.get('/api/my/sellerProfile', async (req, res) => {
+app.get('/api/my/sellerProfile', verifyToken,verifySeller, async (req, res) => {
   try {
     const query = {};
 
@@ -719,7 +909,7 @@ app.get('/api/my/sellerProfile', async (req, res) => {
 
 
 
-app.post('/api/sellerProfile', async (req, res) => {
+app.post('/api/sellerProfile', verifyToken,verifySeller, async (req, res) => {
 
   const profile = req.body;
 
@@ -745,7 +935,7 @@ app.post('/api/sellerProfile', async (req, res) => {
 
 
 
-app.patch("/api/sellerProfile/:sellerId", async (req, res) => {
+app.patch("/api/sellerProfile/:sellerId", verifyToken,verifySeller, async (req, res) => {
   try {
     const { sellerId } = req.params;
 
@@ -845,7 +1035,7 @@ app.delete("/api/products/:id", async (req, res) => {
 // --------wishlist--------
 
 // ১. চেক করা, প্রোডাক্টটি ইতিমধ্যে উইশলিস্টে আছে কিনা এবং বায়ারের সম্পূর্ণ উইশলিস্ট আইডি লিস্ট নেওয়া
-app.get('/api/wishlist/check', async (req, res) => {
+app.get('/api/wishlist/check' , verifyToken , verifyBuyer ,async (req, res) => {
   try {
     const { userId, productId } = req.query;
     if (!userId) return res.status(400).send({ message: "UserId required" });
@@ -866,7 +1056,7 @@ app.get('/api/wishlist/check', async (req, res) => {
 });
 
 // ২. উইশলিস্টে প্রোডাক্ট যোগ করা অথবা থাকলে রিমুভ করা (Toggle Feature)
-app.post('/api/wishlist/toggle', async (req, res) => {
+app.post('/api/wishlist/toggle', verifyToken , verifyBuyer , async (req, res) => {
   try {
     const { userId, productId } = req.body;
     if (!userId || !productId) return res.status(400).send({ message: "Missing data" });
@@ -888,7 +1078,7 @@ app.post('/api/wishlist/toggle', async (req, res) => {
 });
 
 // ৩. বায়ারের ড্যাশবোর্ডে উইশলিস্ট করা প্রোডাক্টগুলোর ডিটেইলস ডাটা রিট্রিভ করা (Aggregate)
-app.get('/api/wishlist/:userId', async (req, res) => {
+app.get('/api/wishlist/:userId', verifyToken ,  verifyBuyer , async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -1024,15 +1214,17 @@ buyerInfo: {
 
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
-  }
-}
-run().catch(console.dir);
+    // await client.db("admin").command({ ping: 1 });
+//     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+//   } finally {
+//     // Ensures that the client will close when you finish/error
+//     // await client.close();
+//   }
+// }
+// run().catch(console.dir);
 
 app.listen(port, () => {
     console.log(`Example app listning on port ${port}`)
 });
+
+module.exports = app;
